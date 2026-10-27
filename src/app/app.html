@@ -1,0 +1,158 @@
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" href="#" (click)="$event.preventDefault(); navigate('storefront')">
+      <span class="brand-mark">C</span>
+      <span class="brand-copy"><strong>clothes</strong><small>ATELIER & BOUTIQUE</small></span>
+    </a>
+    <div class="workspace-label">{{ user ? 'VOTRE ESPACE' : 'BOUTIQUE' }}</div>
+    <nav class="side-nav" aria-label="Navigation principale">
+      @for (page of pages; track page.id) {
+        <button class="nav-item" [class.active]="activePage === page.id" (click)="navigate(page.id)">
+          <span class="nav-icon">{{ page.icon }}</span><span>{{ page.label }}</span>
+          @if (page.id === 'orders' && orders.length) { <span class="nav-count">{{ orders.length }}</span> }
+        </button>
+      }
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="support-card"><span class="support-spark">✳</span><strong>Une boutique, votre signature.</strong><p>{{ user?.role === 'VENDOR' ? 'Gérez votre collection avec élégance.' : 'Trouvez les pièces qui vous ressemblent.' }}</p></div>
+      @if (user) {
+        <button class="account-row" (click)="navigate('profile')"><span class="avatar">{{ initials(user.username) }}</span><span class="account-copy"><strong>{{ user.username }}</strong><small>{{ user.role === 'ADMIN' ? 'Administrateur' : user.role === 'VENDOR' ? 'Vendeur' : 'Client' }}</small></span><span class="account-more">···</span></button>
+      } @else {
+        <div class="account-row guest-row"><span class="avatar">G</span><span class="account-copy"><strong>Visiteur</strong><small>Parcourez la collection librement</small></span></div>
+      }
+    </div>
+  </aside>
+
+  <main class="main-area">
+    <header class="topbar">
+      <div class="breadcrumbs"><span>Boutique</span><span class="crumb-slash">/</span><strong>{{ pageTitle }}</strong></div>
+      <div class="top-actions">
+        <span class="live-indicator"><i></i> Boutique en ligne</span>
+        @if (user) { <button class="button button-quiet button-small" (click)="logout()">Déconnexion</button> }
+        @else {
+          <button class="button button-quiet button-small" (click)="openAuthentication('register')">Créer un compte</button>
+          <button class="button button-dark button-small" (click)="openAuthentication('login')">Se connecter</button>
+        }
+      </div>
+    </header>
+
+    <section class="content">
+      @if (error) { <div class="alert alert-error" role="alert"><span>!</span>{{ error }}<button aria-label="Fermer" (click)="clearError()">×</button></div> }
+      @if (notice) { <div class="alert alert-success" role="status"><span>✓</span>{{ notice }}<button aria-label="Fermer" (click)="notice = ''">×</button></div> }
+
+      @if (showAuth) {
+        <div class="auth-panel-wrap">
+          <button class="text-link auth-dismiss" (click)="closeAuthentication()">← Continuer à parcourir la boutique</button>
+          <shop-auth-panel [mode]="authMode" (modeChange)="setAuthMode($event)" (submit)="authenticate($event)"/>
+        </div>
+      }
+
+      @switch (activePage) {
+        @case ('storefront') {
+          @if (user?.role === 'VENDOR' && user?.status !== 'APPROVED') {
+            <div class="alert alert-success vendor-review" role="status"><span>✓</span>Votre compte vendeur est {{ user?.status === 'REJECTED' ? 'refusé' : 'en attente de validation par un administrateur' }}. Vous pouvez parcourir la boutique pendant ce temps.</div>
+          }
+          <shop-storefront-page
+            [products]="products"
+            [types]="types"
+            [loading]="loading"
+            [userId]="user?.userId ?? null"
+            [canOrder]="!user || user.role === 'CLIENT'"
+            [cart]="cart"
+            [cartCount]="cartItemCount"
+            [cartTotal]="cartTotal"
+            [shippingAddress]="shippingAddress"
+            [checkoutLoading]="checkoutLoading"
+            (orderProduct)="addToCart($event.product, $event.quantity)"
+            (quantityChange)="changeCartQuantity($event.productId, $event.quantity)"
+            (removeFromCart)="removeFromCart($event)"
+            (shippingAddressChange)="shippingAddress = $event"
+            (checkout)="checkout()"
+          />
+        }
+        @case ('dashboard') {
+          <shop-dashboard-page
+            [products]="products"
+            [orders]="orders"
+            [user]="user"
+            [revenue]="revenueEstimate"
+            [lowStockCount]="lowStockCount"
+            (addProduct)="openNewProduct()"
+            (viewProducts)="navigate('products')"
+            (orderProduct)="addToCart($event.product, $event.quantity)"
+            (editProduct)="editProduct($event)"
+            (deleteProduct)="deleteProduct($event)"
+          />
+        }
+        @case ('products') {
+          <shop-products-page
+            [products]="products"
+            [types]="types"
+            [userId]="user?.userId ?? null"
+            (addProduct)="openNewProduct()"
+            (orderProduct)="addToCart($event.product, $event.quantity)"
+            (editProduct)="editProduct($event)"
+            (deleteProduct)="deleteProduct($event)"
+          />
+        }
+        @case ('orders') {
+          <shop-orders-page
+            [orders]="orders"
+            (statusChange)="changeOrderStatus($event)"
+            (cancel)="cancelOrder($event)"
+            (viewProducts)="navigate('products')"
+          />
+        }
+        @case ('catalog') {
+          <shop-catalog-page
+            [types]="types"
+            [sizes]="sizes"
+            (addType)="saveCatalog('types', $event)"
+            (addSize)="saveCatalog('sizes', $event)"
+            (renameType)="renameCatalog('types', $event.item, $event.name)"
+            (renameSize)="renameCatalog('sizes', $event.item, $event.name)"
+            (deleteType)="deleteCatalog('types', $event)"
+            (deleteSize)="deleteCatalog('sizes', $event)"
+          />
+        }
+        @case ('profile') {
+          <shop-profile-page
+            [username]="user?.username ?? ''"
+            [email]="user?.email ?? ''"
+            [customer]="customer"
+            [name]="customerName"
+            [phone]="customerPhone"
+            (nameChange)="customerName = $event"
+            (phoneChange)="customerPhone = $event"
+            (save)="saveCustomer($event)"
+            (delete)="deleteCustomer()"
+            (viewProducts)="navigate('products')"
+          />
+        }
+        @case ('admin') {
+          <shop-admin-users-page
+            [users]="adminUsers"
+            [loading]="adminUsersLoading"
+            [loadFailed]="adminUsersLoadFailed"
+            [busyUserId]="busyAdminUserId"
+            (retry)="reloadAdminUsers()"
+            (approve)="approveVendor($event)"
+            (reject)="rejectVendor($event)"
+          />
+        }
+      }
+    </section>
+    <footer class="footer"><span>© 2026 Clothes Atelier</span><span>Fait avec soin, pour un style qui vous ressemble.</span></footer>
+  </main>
+</div>
+
+@if (productEditorOpen) {
+  <shop-product-editor
+    [product]="editingProduct"
+    [types]="types"
+    [sizes]="sizes"
+    [saving]="savingProduct"
+    (saved)="saveProduct($event)"
+    (close)="closeProductEditor()"
+  />
+}
